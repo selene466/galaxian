@@ -14,6 +14,11 @@ var error := ""
 var supported := false
 
 
+func _init() -> void:
+	# Animated from render frames; the physics-tick blend would only add lag.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+
+
 func configure(library, chapter: int, station_id: int) -> bool:
 	var data: Dictionary = library.content.briefing_scene
 	var definition: Dictionary = data.chapters[chapter]

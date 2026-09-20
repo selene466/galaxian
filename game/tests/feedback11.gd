@@ -109,23 +109,23 @@ func run():
 	)
 	app.hud._process(0)
 	check(
-		is_equal_approx(app.hud.buttons.boost.self_modulate.a, 55.0 / 255),
+		is_equal_approx(app.hud.buttons.boost.availability, 55.0 / 255),
 		"Active boost dims actual touch button"
 	)
 	app.session.motion.boost_remaining = 0
 	app.session.motion.cooldown = lib.content.player_motion.recharge_seconds * .5
 	app.hud._process(0)
 	check(
-		is_equal_approx(app.hud.buttons.boost.self_modulate.a, (55.0 + 37.5) / 255),
+		is_equal_approx(app.hud.buttons.boost.availability, (55.0 + 37.5) / 255),
 		"Recharge progressively restores source opacity"
 	)
 	app.session.motion.cooldown = 0
 	app.hud._process(0)
-	check(app.hud.buttons.boost.self_modulate.a == 1, "Ready boost is fully opaque")
+	check(app.hud.buttons.boost.availability == 1, "Ready boost is fully opaque")
 	app.session.loadout.fitted[lib.MISSILE_CATEGORY] = {}
 	app.hud._process(0)
 	check(
-		is_equal_approx(app.hud.buttons.missiles.self_modulate.a, 50.0 / 255),
+		is_equal_approx(app.hud.buttons.missiles.availability, 50.0 / 255),
 		"Missing missile is visibly unavailable"
 	)
 	var missile := -1
@@ -137,12 +137,12 @@ func run():
 	flight.weapon_timers[missile] = 2
 	app.hud._process(0)
 	check(
-		is_equal_approx(app.hud.buttons.missiles.self_modulate.a, 50.0 / 255),
+		is_equal_approx(app.hud.buttons.missiles.availability, 50.0 / 255),
 		"Reloading missile is dim"
 	)
 	flight.weapon_timers[missile] = 0
 	app.hud._process(0)
-	check(app.hud.buttons.missiles.self_modulate.a == 1, "Reloaded missile is fully opaque")
+	check(app.hud.buttons.missiles.availability == 1, "Reloaded missile is fully opaque")
 	app.session.loadout.fitted[lib.MISSILE_CATEGORY] = {}
 	var captured: Dictionary = app.session.capture()
 	var camera_pose: Transform3D = flight.camera.global_transform

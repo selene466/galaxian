@@ -161,14 +161,20 @@ flight state and camera. Controller sticks move the camera and triggers zoom.
 Under **Options → Display**, toggle **Fullscreen** or choose an **Aspect ratio**.
 **Auto** fills your browser or resizable window; fixed ratios preserve the picture
 with borders where needed. F11 also toggles fullscreen. If your browser releases
-the mouse, click the flight view to capture it again.
+the mouse, click the flight view to capture it again. **Frame rate limit** caps
+rendering at 30, 60, 90, 120, 144 or 240 frames per second; **Auto** follows the
+refresh rate of the screen the window is on, and **Unlimited** leaves only
+vertical sync. Flight renders smoothly at any of these: the simulation keeps its
+fixed step and the picture is blended between steps.
 
 ## Saves and updates
 
 Each IPA has a separate content identity, cache and saves. Campaign, exploration
 Survival and Swarm use separate slots. Checkpoint writes preserve a `.bak` recovery copy;
 failed writes are reported without replacing the last valid save. Previous preview
-pilots remain compatible. Old imported caches may require choosing the IPA again.
+pilots remain compatible. Old imported caches may require choosing the IPA again;
+1.0.18 reads weapon and radio sound selections from the archive, so a cache from
+an earlier version asks for the IPA once. Saves are kept.
 
 **Load / recover** in Pause, or **Load** after defeat, lets you choose the latest
 autosave, the mission/flight start, or the last station. Earlier checkpoints restore

@@ -78,10 +78,16 @@ func configure(library, view: Camera3D, sky: Dictionary) -> void:
 
 func _process(_seconds: float) -> void:
 	size = get_viewport_rect().size
-	var sun := camera.global_position + direction * camera.far * .5
-	projected = not camera.is_position_behind(sun)
+	# Anchor and project the sun through one camera pose, the rendered one, so
+	# a moving camera never shifts a body at infinity, whichever pose the
+	# viewport happens to hold at this point of the frame.
+	var pose: Transform3D = camera.get_global_transform_interpolated()
+	var local: Vector3 = pose.affine_inverse() * (pose.origin + direction * camera.far * .5)
+	projected = local.z < 0
 	if projected:
-		sun_screen = camera.unproject_position(sun)
+		var clip: Vector4 = camera.get_camera_projection() * Vector4(local.x, local.y, local.z, 1.0)
+		var view := Vector2(get_viewport().get_visible_rect().size)
+		sun_screen = Vector2((clip.x / clip.w + 1.0) * .5 * view.x, (1.0 - clip.y / clip.w) * .5 * view.y)
 	queue_redraw()
 
 

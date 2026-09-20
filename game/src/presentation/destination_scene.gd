@@ -58,6 +58,11 @@ static func tick_pose(config: Dictionary, tick: int) -> Dictionary:
 	}
 
 
+func _init() -> void:
+	# Animated from render frames; the physics-tick blend would only add lag.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+
+
 func configure(library, station_id: int) -> bool:
 	if camera != null:
 		error = "Destination scene is already configured."

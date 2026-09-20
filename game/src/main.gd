@@ -96,7 +96,8 @@ var settings := {
 	"linked_fire": false,
 	"touch_layout": {},
 	"fullscreen": false,
-	"aspect_ratio": "auto"
+	"aspect_ratio": "auto",
+	"frame_rate": "auto"
 }
 var notification_text := ""
 var notification_time := 0.0
@@ -137,6 +138,8 @@ func _ready() -> void:
 	if not OS.has_feature("web") and not preload("res://src/presentation/bitmap_font.gd").is_mobile():
 		DisplaySettings.set_fullscreen(get_window(), bool(settings.fullscreen))
 	settings.fullscreen = DisplaySettings.fullscreen(get_window())
+	settings.frame_rate = DisplaySettings.frame_rate_value(settings.frame_rate)
+	DisplaySettings.apply_frame_rate(get_window(), settings.frame_rate)
 	apply_audio_settings()
 	importer.progress.connect(import_progress)
 	get_window().files_dropped.connect(files_dropped)
@@ -155,6 +158,8 @@ func _ready() -> void:
 func setup_world() -> void:
 	add_child(world)
 	world.add_child(showcase)
+	# The title ship turns from render frames; flight alone is tick-driven.
+	showcase.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	world.add_child(menu_camera)
 	menu_camera.position = Vector3(100, 45, 120)
 	menu_camera.look_at_from_position(menu_camera.position, Vector3(10, 0, 0))
@@ -2064,9 +2069,14 @@ func change_option(key: String, value: Variant) -> void:
 	elif key == "fullscreen" and value is bool:
 		DisplaySettings.set_fullscreen(get_window(), value)
 		settings.fullscreen = value
+		# Fullscreen may land on another panel; an automatic limit follows it.
+		DisplaySettings.apply_frame_rate(get_window(), settings.frame_rate)
 	elif key == "aspect_ratio" and value is String and DisplaySettings.RATIOS.has(value):
 		settings.aspect_ratio = value
 		DisplaySettings.apply_aspect(get_window(), value)
+	elif key == "frame_rate" and DisplaySettings.FRAME_RATES.has(value):
+		settings.frame_rate = DisplaySettings.frame_rate_value(value)
+		DisplaySettings.apply_frame_rate(get_window(), settings.frame_rate)
 	elif key in ["music_volume", "effects_volume", "sensitivity", "motion_sensitivity"]:
 		if not value is float and not value is int: return
 		if not is_finite(float(value)): return

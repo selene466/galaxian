@@ -113,6 +113,8 @@ func flash(shield_after: float, pose: Transform3D, incoming := Vector3.ZERO) -> 
 		var direction := incoming.normalized()
 		var up := Vector3.RIGHT if absf(direction.dot(Vector3.UP)) > .99 else Vector3.UP
 		global_basis = Basis.looking_at(direction, up)
+	# A flash appears where the hull is now; never blend it in from the last one.
+	reset_physics_interpolation()
 	meshes["shield" if shield_after > data.visual_shield_above else "hull"].show()
 	pending_sound = "shield" if shield_after > data.sound_shield_above else "hull"
 

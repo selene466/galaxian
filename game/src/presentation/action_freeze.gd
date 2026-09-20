@@ -31,6 +31,8 @@ func configure(source, soundtrack: AudioStreamPlayer) -> void:
 	saved_ship_visible = flight.ship.visible
 	saved_process_mode = flight.process_mode
 	flight.process_mode = Node.PROCESS_MODE_DISABLED
+	# The frozen scene is orbited from render frames, not physics ticks.
+	flight.camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	pause_audio(flight)
 	saved_music_pause = music.stream_paused
 	music.stream_paused = true
@@ -69,6 +71,8 @@ func restore_scene() -> void:
 		flight.ship.visible = saved_ship_visible
 		flight.process_mode = saved_process_mode
 		flight.backdrop.follow(flight.camera)
+		flight.camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_INHERIT
+		flight.snap_camera(flight.camera_view)
 	for record in saved_audio:
 		if is_instance_valid(record[0]):
 			record[0].stream_paused = record[1]

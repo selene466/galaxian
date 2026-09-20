@@ -123,7 +123,7 @@ func check_steering():
 			flight.steer(0, .05)
 			local_forward = before.inverse() * -flight.ship.basis.z
 			check(local_forward.y > 0 and absf(local_forward.x) < .001, "Pitch follows cockpit at " + str(Vector2(pitch, roll)))
-	for child in [flight.ship, flight.camera, flight.audio, flight.ambience, flight.player_hit]:
+	for child in [flight.ship, flight.camera, flight.ambience, flight.player_hit]:
 		flight.add_child(child)
 	flight.player_hit.add_child(flight.player_hit.audio)
 	flight.free()

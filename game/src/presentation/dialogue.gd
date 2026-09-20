@@ -7,12 +7,19 @@ var cue := {}
 var lines := PackedStringArray()
 var portrait: Texture2D
 var panel_rect := Rect2()
+## The supplied radio plays its cue on a message's first draw, then that
+## message's speech; leaving the message stops the speech. Speech IDs the bank
+## never registered stay silent, exactly as in the supplied build.
+var chime := preload("res://src/presentation/audio_settings.gd").effect_player()
+var voice := preload("res://src/presentation/audio_settings.gd").effect_player()
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	resized.connect(queue_redraw)
+	add_child(chime)
+	add_child(voice)
 
 
 func present(value: Dictionary) -> void:
@@ -20,11 +27,25 @@ func present(value: Dictionary) -> void:
 		return
 	cue = value.duplicate()
 	visible = not cue.is_empty()
+	voice.stop()
+	voice.stream = null
 	if visible:
 		portrait = library.radio_portrait(int(cue.speaker))
 		lines = preload("res://src/presentation/bitmap_font.gd").wrap_lines(library,
 			library.text(int(cue.text)), library.content.radio_ui.text_width - portrait.get_width())
+		play_clip(chime, int(library.content.radio_ui.audio.cue))
+		play_clip(voice, library.radio_voice(cue))
 	queue_redraw()
+
+
+func play_clip(player: AudioStreamPlayer, id: int) -> void:
+	player.stop()
+	player.stream = library.sound_clip(id)
+	if player.stream == null:
+		return
+	player.volume_linear = float(library.content.sound_bank[str(id)].gain)
+	if DisplayServer.get_name() != "headless":
+		player.play()
 
 
 func _draw() -> void:
@@ -52,6 +73,14 @@ func _draw() -> void:
 		preload("res://src/presentation/bitmap_font.gd").draw_text(
 			self, library, lines[index], text_point + Vector2(0, index * line_height))
 	draw_set_transform(Vector2.ZERO)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_PAUSED:
+		voice.stream_paused = true
+		chime.stop()
+	elif what == NOTIFICATION_APPLICATION_RESUMED:
+		voice.stream_paused = false
 
 
 func _input(event: InputEvent) -> void:

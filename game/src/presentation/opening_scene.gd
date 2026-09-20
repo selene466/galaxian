@@ -23,6 +23,11 @@ var supported := false
 var error := ""
 
 
+func _init() -> void:
+	# Animated from render frames; the physics-tick blend would only add lag.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+
+
 func configure(source, chapter_index: int, location: int, player_ship: int, stock: Array, page := 0) -> bool:
 	library = source
 	chapter = chapter_index

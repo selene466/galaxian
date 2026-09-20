@@ -36,6 +36,7 @@ func label_for(key: String) -> String:
 		"aim_assist": "Aim assistance", "linked_fire": "Fire linked weapons",
 		"touch": "Show touch controls", "sensitivity": "Mouse sensitivity",
 		"language": "Language", "fullscreen": "Fullscreen", "aspect_ratio": "Aspect ratio",
+		"frame_rate": "Frame rate limit",
 		"flight_overlays": "Show flight text overlays", "extra_flight_buttons": "Show extra flight buttons",
 		"flight_hud": "Flight display",
 		"original_flight_controls": "Original flight controls",
@@ -57,7 +58,7 @@ func show_section(page: String, focus_key: String = "") -> void:
 		"motion": ["motion_steering", "motion_sensitivity", "calibrate_motion"],
 		"weapons": ["aim_assist", "linked_fire"],
 		"audio": ["effects_volume", "music_volume"],
-		"display": ["fullscreen", "aspect_ratio", "flight_hud"],
+		"display": ["fullscreen", "aspect_ratio", "frame_rate", "flight_hud"],
 		"flight_hud": ["targeting_reticle", "touch", "flight_overlays", "extra_flight_buttons"], "help": []
 	}.get(page, [])
 	if preload("res://src/presentation/bitmap_font.gd").is_mobile():
@@ -70,6 +71,8 @@ func show_section(page: String, focus_key: String = "") -> void:
 		if key == "aspect_ratio":
 			var ratio: String = values.get(key, "auto")
 			caption += ": " + ("Auto" if ratio == "auto" else ratio)
+		if key == "frame_rate":
+			caption += ": " + preload("res://src/presentation/display_settings.gd").frame_rate_caption(get_window(), values.get(key, "auto"))
 		entries.append({"action": key, "text": caption})
 	present(page, entries, library.text(int(library.content.briefing_ui.labels.back)), "back", help_text if page == "help" else "")
 	# Original sliders are taller than ordinary rows. Native extra settings must
@@ -214,6 +217,12 @@ func handle_action(action: String) -> void:
 	elif action == "aspect_ratio":
 		var ratios: Array = preload("res://src/presentation/display_settings.gd").RATIOS.keys()
 		values[action] = ratios[(ratios.find(values.get(action, "auto")) + 1) % ratios.size()]
+		setting_changed.emit(action, values[action])
+		show_section(section, action)
+	elif action == "frame_rate":
+		var Display = preload("res://src/presentation/display_settings.gd")
+		var rates: Array = Display.FRAME_RATES
+		values[action] = rates[(rates.find(Display.frame_rate_value(values.get(action, "auto"))) + 1) % rates.size()]
 		setting_changed.emit(action, values[action])
 		show_section(section, action)
 	elif values.get(action) is bool:

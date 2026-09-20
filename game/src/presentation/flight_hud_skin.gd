@@ -43,9 +43,11 @@ static func gradient(radial: bool) -> GradientTexture2D:
 	result.height = 256
 	result.gradient = Gradient.new()
 	if radial:
+		# The imported fire overlay's highlight sits on the disk's centre, so the
+		# gradient does too; an offset glow reads as a ring drawn off its button.
 		result.fill = GradientTexture2D.FILL_RADIAL
-		result.fill_from = Vector2(.46, .42)
-		result.fill_to = Vector2(.99, .55)
+		result.fill_from = Vector2(.5, .5)
+		result.fill_to = Vector2(.5, 1.046)
 		result.gradient.offsets = PackedFloat32Array([0, .25, .65, .93, 1])
 		result.gradient.colors = PackedColorArray([Color("91d4db"), Color("5abac9"), Color("1ba2b6"), Color("00778c"), Color("00687c")])
 	else:
@@ -147,6 +149,18 @@ static func text(canvas: CanvasItem, value: String, at: Vector2, font_size: floa
 	canvas.draw_set_transform(Vector2.ZERO)
 	canvas.draw_string(font, point, value, HORIZONTAL_ALIGNMENT_LEFT, max_width * factor if max_width > 0 else -1.0, pixels, color)
 	canvas.draw_set_transform(Vector2.ZERO, 0, Vector2.ONE * factor)
+
+
+static func fitted_size(value: String, font_size: float, room: float, factor: float) -> float:
+	## The largest size up to `font_size` at which `value` fits `room` composition
+	## units, measured at the whole pixel sizes `text` actually renders.
+	var font := ThemeDB.fallback_font
+	var pixels := maxi(8, roundi(font_size * factor))
+	if room <= 0:
+		return font_size
+	while pixels > 8 and font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, pixels).x / factor > room:
+		pixels -= 1
+	return minf(font_size, pixels / factor)
 
 
 static func imported_glyph(texture: Texture2D) -> Texture2D:

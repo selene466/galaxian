@@ -30,6 +30,11 @@ var error := ""
 var supported := false
 
 
+func _init() -> void:
+	# Animated from render frames; the physics-tick blend would only add lag.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+
+
 func configure(library, station_id: int, player_actor: int, title: bool, seed_value: int) -> bool:
 	if camera != null:
 		error = "Menu scene is already configured."

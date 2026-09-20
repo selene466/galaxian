@@ -188,6 +188,53 @@ func check_original_art(app) -> void:
 	check(not hud.extra_buttons.has("−") and not hud.extra_buttons.has("+"), "Slider replaces separate throttle minus/plus controls")
 	check(not hud.extra_buttons.has("CAMERA") and not hud.extra_buttons.has("FREELOOK"), "Looking around needs no dedicated camera control")
 	check(not "%" in hud.throttle_control.speed_text and hud.throttle_control.speed_text.ends_with("m/s"), "Throttle shows actual speed without a percentage scale")
+	await check_weapon_plaque(app)
+
+
+func check_weapon_plaque(app) -> void:
+	# The supplied HUD pairs the weapon name with the catalogue icon the hangar
+	# uses for the same item, drawn right-aligned four units before the label.
+	var lib = app.library
+	var hud = app.hud
+	var weapon: int = app.session.weapon_id
+	var icon: Texture2D = lib.item_icon(weapon)
+	var hangar: Texture2D = lib.ui_image(lib.content.hangar_ui.pictures.item_icons[weapon])
+	check(icon != null and icon.get_image().get_data() == hangar.get_image().get_data(), "Plaque icon is the imported catalogue icon of the equipped weapon")
+	check(lib.item_icon(-1) == null and lib.item_icon(lib.items.size()) == null, "No icon is invented for an unknown weapon")
+	check(hud.weapon_caption.visible, "Touch plaque shows the equipped weapon")
+	for id in lib.items.size():
+		if int(lib.items[id][1]) >= lib.SHIELD_CATEGORY:
+			continue
+		var room: float = hud.plaque_center.x - 30 - (hud.size.x / hud.factor - lib.content.flight_ui.artwork.layout.weapon_label_right - 2) - 1
+		var font_size: float = preload("res://src/presentation/flight_hud_skin.gd").fitted_size(lib.item_name(id), 13, room, hud.factor)
+		var width: float = ThemeDB.fallback_font.get_string_size(lib.item_name(id), HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(8, roundi(font_size * hud.factor))).x / hud.factor
+		check(font_size <= 13 and font_size > 9 and width <= room + .5, "Weapon name %s stays clear of the fire button arc" % lib.item_name(id))
+	if DisplayServer.get_name() == "headless":
+		return
+	await settle(app)
+	await RenderingServer.frame_post_draw
+	var image: Image = root.get_texture().get_image()
+	var layout: Dictionary = lib.content.flight_ui.artwork.layout
+	var right: float = (hud.size.x / hud.factor - layout.weapon_label_right - 4) * hud.factor
+	var middle: float = (hud.plaque_center.y + 19.5) * hud.factor
+	var extent: Vector2 = icon.get_size() * hud.factor
+	var rect := Rect2i(Vector2i(Vector2(right - extent.x, middle - extent.y * .5)), Vector2i(extent))
+	# Mercury's imported icon carries a saturated green cell; the plaque is teal.
+	var green := 0
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var pixel := image.get_pixel(x, y)
+			if pixel.g > .6 and pixel.r < .3 and pixel.b < .3:
+				green += 1
+	check(green > 0, "Rendered plaque shows the imported weapon icon left of the name")
+	var beyond := Rect2i(rect.position - Vector2i(int(extent.x), 0), rect.size)
+	var stray := 0
+	for y in range(beyond.position.y, beyond.end.y):
+		for x in range(maxi(0, beyond.position.x), beyond.end.x):
+			var pixel := image.get_pixel(x, y)
+			if pixel.g > .6 and pixel.r < .3 and pixel.b < .3:
+				stray += 1
+	check(stray == 0, "Icon occupies its source slot rather than the plaque's rounded end")
 
 
 func check_multitouch(app) -> void:
@@ -924,6 +971,13 @@ func check_radio(app) -> void:
 		app.flight._physics_process(1.0 / 60.0)
 	await settle(app)
 	check(not app.session.radio_cue().is_empty() and app.dialogue_panel.visible, "Source tutorial clock displays an actual imported radio cue")
+	var audio: Dictionary = app.library.content.radio_ui.audio
+	var chime: AudioStreamPlayer = app.dialogue_panel.chime
+	check(chime.stream != null and chime.stream == app.library.sound_clip(int(audio.cue)) and is_equal_approx(chime.volume_linear, float(app.library.content.sound_bank[str(int(audio.cue))].gain)), "A newly shown message plays the imported radio cue at its registered gain")
+	check(chime.bus == preload("res://src/presentation/audio_settings.gd").EFFECTS, "Radio cue plays on the effects bus")
+	var voice_id: int = app.library.radio_voice(app.session.radio_cue())
+	check(voice_id == int(app.session.radio_cue().text) - int(audio.voice_text_offset), "Message speech is the text ID offset the source subtracts")
+	check(not app.library.content.sound_bank.has(str(voice_id)) and app.dialogue_panel.voice.stream == null, "Unregistered message speech stays silent, as supplied")
 	if DisplayServer.get_name() == "headless":
 		# Radio's input rectangle is authored by its draw pass. Exercise its real
 		# hit area in the rendered run rather than manufacture one for headless.

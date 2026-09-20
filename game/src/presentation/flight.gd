@@ -75,18 +75,22 @@ var weapon_hit_ms := 0.0
 var intro_stage := -1
 var rng := RandomNumberGenerator.new()
 var settings := {"sensitivity": .0025, "invert": false, "original_flight_controls": false, "aim_assist": true}
-var audio := preload("res://src/presentation/audio_settings.gd").effect_player()
+## One voice per registered weapon sound, as the supplied engine keeps one
+## source per sound: a repeat restarts its own clip and never cuts another.
+var weapon_voices := {}
 var capture_button_held := false
 var web_mouse_input := OS.has_feature("web")
 var mouse_flight_enabled := false
 var web_lock_observed := false
-var laser_sound: AudioStreamWAV
 var ambience := Node3D.new()
 var checkpoint_elapsed := 0.0
 var first_person := false
 var motion_sensor
 var chase_follow_basis := Basis.IDENTITY
 var chase_view_basis := Basis.IDENTITY
+## The view the camera was last placed for. A cut between chase, cockpit and
+## cinematic framing is a jump, not a move, so the renderer must not blend it.
+var camera_view := ""
 var touch_camera_active := false
 var touch_camera_angles := Vector2.ZERO
 const TOUCH_CAMERA_RETURN_SECONDS := .22
@@ -163,12 +167,6 @@ func setup(data, state, options: Dictionary, resume: bool = false) -> void:
 	add_child(ambience)
 	if session.active_job.is_empty():
 		build_station_area()
-	add_child(audio)
-	var sound_path: String = library.root.path_join("data/sounds/wpn_laser_01.wav")
-	if FileAccess.file_exists(sound_path):
-		laser_sound = AudioStreamWAV.load_from_file(sound_path)
-	audio.volume_db = -12
-	audio.stream = laser_sound
 	spawn_targets(true)
 	build_fields()
 	nebula = Nebula.new()
@@ -267,10 +265,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		and not (motion_steering_enabled() and auto_pilot)
 	):
 		var movement := Vector2(-event.relative.x, -event.relative.y * (-1 if settings.invert else 1)) * float(settings.sensitivity)
-		if original_controls():
-			mouse_motion += movement
-		else:
-			steer(movement.x, movement.y)
+		# Buffer pointer movement for the next physics tick in both modes. Turning
+		# the hull here, between ticks, would leave the chase camera a tick behind
+		# and make the rendered pose alternate between frames.
+		mouse_motion += movement
 		if event.relative.length() > 2:
 			auto_pilot = false
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -508,6 +506,10 @@ func _physics_process(delta: float) -> void:
 	for substep in time_factor:
 		mouse_motion = pointer
 		step(minf(delta, .05))
+		# Direct cockpit steering is an angle already taken, not a rate to hold
+		# for the accelerated time; the original mode's rate applies each substep.
+		if not original_controls():
+			pointer = Vector2.ZERO
 		if paused:
 			break
 		if (auto_pilot and not can_accelerate_time()) or (not auto_pilot and danger()):
@@ -609,7 +611,12 @@ func step(dt: float) -> void:
 			- float(Input.is_physical_key_pressed(KEY_UP))
 			- pad.look.y * (-1 if settings.invert else 1)
 		)
-		var pointer := Steering.mouse_axis(mouse_motion, dt, Steering.maximum_rate(library.content.player_motion.steering, player_agility()))
+		var pointer := Vector2.ZERO
+		if original_controls():
+			pointer = Steering.mouse_axis(mouse_motion, dt, Steering.maximum_rate(library.content.player_motion.steering, player_agility()))
+		elif mouse_motion != Vector2.ZERO:
+			# The pointer's whole angular distance, applied at the tick.
+			steer(mouse_motion.x, mouse_motion.y)
 		mouse_motion = Vector2.ZERO
 		yaw += pointer.x
 		pitch += pointer.y
@@ -919,8 +926,19 @@ func fire_weapon(weapon_id: int) -> void:
 	if not fired:
 		return
 	sync_projectiles()
-	if laser_sound != null and DisplayServer.get_name() != "headless":
-		audio.play()
+	play_weapon_sound(library.weapon_sound(weapon_id))
+
+
+func play_weapon_sound(id: int) -> void:
+	if not weapon_voices.has(id):
+		var voice := preload("res://src/presentation/audio_settings.gd").effect_player()
+		voice.stream = library.sound_clip(id)
+		voice.volume_linear = float(library.content.sound_bank[str(id)].gain)
+		add_child(voice)
+		weapon_voices[id] = voice
+	var voice: AudioStreamPlayer = weapon_voices[id]
+	if voice.stream != null and DisplayServer.get_name() != "headless":
+		voice.play()
 
 
 func advance_projectiles(dt: float, previous_player: Vector3 = Vector3.INF) -> void:
@@ -1422,6 +1440,7 @@ func update_camera(dt: float) -> void:
 		if camera.position.distance_squared_to(ship.position) > .001:
 			camera.look_at(ship.position, ship.basis.y)
 		if backdrop != null: backdrop.follow(camera)
+		if camera_view != "outro": snap_camera("outro")
 		return
 	camera.fov = FlightEffects.field_of_view(library.content.flight_effects, boost_elapsed(), boosting())
 	var direction: Dictionary = session.Mission.Sequence.directives(
@@ -1477,6 +1496,9 @@ func update_camera(dt: float) -> void:
 		update_player_hull_frame()
 		if backdrop != null:
 			backdrop.follow(camera)
+		# Directed framing eases from wherever the camera was; only its first
+		# placement after another view is a cut.
+		if camera_view != "focus": snap_camera("focus")
 		return
 	if not chase_camera_active: chase_follow_basis = ship.basis
 	chase_camera_active = true
@@ -1509,6 +1531,17 @@ func update_camera(dt: float) -> void:
 	player_hit.shake_camera(camera, dt, follow_distance)
 	if backdrop != null:
 		backdrop.follow(camera)
+	var view := "cockpit" if first_person else "chase"
+	if camera_view != view: snap_camera(view)
+
+
+func snap_camera(view: String) -> void:
+	## Present the camera's new placement at once. Rendering blends transforms
+	## between physics ticks, which would otherwise sweep a cut across a tick.
+	camera_view = view
+	camera.reset_physics_interpolation()
+	if backdrop != null:
+		backdrop.reset_physics_interpolation()
 
 
 func pause(value: bool) -> void:
@@ -1570,8 +1603,9 @@ func capture_mouse() -> void:
 
 
 func _exit_tree() -> void:
-	audio.stop()
-	audio.stream = null
+	for voice: AudioStreamPlayer in weapon_voices.values():
+		voice.stop()
+		voice.stream = null
 
 
 func hostile(actor: Dictionary) -> bool:
@@ -1750,6 +1784,10 @@ func begin_outro() -> void:
 	chase_camera_active = false
 	first_person = false
 	ship.show()
+	camera.position = outro_camera_position
+	if camera.position.distance_squared_to(ship.position) > .001:
+		camera.look_at(ship.position, ship.basis.y)
+	snap_camera("outro")
 	displayed_bank = Vector3.ZERO
 	update_player_hull_frame()
 	controls.clear()

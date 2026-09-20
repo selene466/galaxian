@@ -147,7 +147,11 @@ func _process(_delta: float) -> void:
 	if not active:
 		return
 	var radar: Dictionary = flight.library.content.flight_ui.radar
-	var aim_point: Vector3 = flight.ship.position - flight.ship.basis.z * radar.aim_distance
+	# The simulation advances at the physics rate and the scene is rendered at
+	# the interpolated pose between ticks, so project from that pose too: a
+	# marker placed from the tick pose would swim against the hull it labels.
+	var ship_pose: Transform3D = flight.ship.get_global_transform_interpolated()
+	var aim_point: Vector3 = ship_pose.origin - ship_pose.basis.z * radar.aim_distance
 	reticle.texture = radar_art.aim_hit if flight.weapon_hit_ms > 0 else radar_art.aim
 	reticle.size = reticle.texture.get_size() * factor
 	reticle.visible = not flight.camera.is_position_behind(aim_point)
@@ -186,7 +190,8 @@ func _process(_delta: float) -> void:
 				func(identifier): return int(identifier) == int(group.actor)
 			)
 		)
-		place(marker, actor.node.position, marker_kind(team, actor.state), near)
+		var shown: Vector3 = actor.node.get_global_transform_interpolated().origin
+		place(marker, shown, marker_kind(team, actor.state), near)
 		marker.label.hide()
 		marker.health.color = Color.hex(int(radar.colors[team]))
 		var maximum: float = flight.library.group_hull(group, int(flight.session.active_job.rank))
@@ -200,11 +205,11 @@ func _process(_delta: float) -> void:
 		marker.health_edge.position = Vector2(0, (edge.gap - radar.health_gap) * factor)
 		marker.health_edge.size = Vector2(marker.health.size.x, factor)
 		if team == "enemy" and marker.health.visible:
-			place_lead(marker, actor, group, directions)
+			place_lead(marker, actor, shown, group, directions)
 
 
 func place_lead(
-	marker: Dictionary, actor: Dictionary, group: Dictionary, directions: Dictionary
+	marker: Dictionary, actor: Dictionary, shown: Vector3, group: Dictionary, directions: Dictionary
 ) -> void:
 	var rule: Dictionary = flight.library.content.flight_ui.radar.lead
 	var preference: Variant = flight.settings.get("targeting_reticle")
@@ -233,9 +238,7 @@ func place_lead(
 	# Preserve the imported stepped estimate. Floating-point world vectors avoid
 	# reproducing the original fixed-point arithmetic implementation.
 	var steps := maxi(int(rule.minimum), int(distance / float(rule.bucket)))
-	var point: Vector3 = (
-		actor.node.position + velocity / projectile_speed * float(rule.scale) * steps
-	)
+	var point: Vector3 = shown + velocity / projectile_speed * float(rule.scale) * steps
 	if not point.is_finite() or flight.camera.is_position_behind(point):
 		return
 	var screen: Vector2 = flight.camera.unproject_position(point)
@@ -532,7 +535,9 @@ func _draw() -> void:
 		HudSkin.redraw_layer(plaque_layer)
 		weapon_caption.queue_redraw()
 	elif flight.session.weapon_id >= 0 and survival_rules.is_empty():
-		bitmap(flight.library.item_name(flight.session.weapon_id), Vector2(extent.x - layout.weapon_label_right, extent.y - layout.weapon_label_bottom - library.radio_glyphs().values()[0].size.y), 90)
+		var label := Vector2(extent.x - layout.weapon_label_right, extent.y - layout.weapon_label_bottom - library.radio_glyphs().values()[0].size.y)
+		draw_weapon_icon(self, label.x - 4, label.y + 8)
+		bitmap(flight.library.item_name(flight.session.weapon_id), label, 90)
 	if not survival_rules.is_empty():
 		draw_survival(extent)
 	var definition: Dictionary = flight.session.mission_definition()
@@ -749,7 +754,27 @@ func paint_plaque(canvas: Node2D) -> void:
 
 
 func paint_weapon_caption() -> void:
-	HudSkin.text(weapon_caption, flight.library.item_name(flight.session.weapon_id), Vector2(size.x / factor - 114, plaque_center.y + 24.5), 13, factor, HudSkin.PALE, true, 90)
+	var layout: Dictionary = flight.library.content.flight_ui.artwork.layout
+	var label_x: float = size.x / factor - layout.weapon_label_right
+	# The supplied HUD pairs the name with the equipped weapon's catalogue icon:
+	# right-aligned four units before the label, centred on the plaque strip.
+	weapon_caption.draw_set_transform(Vector2.ZERO, 0, Vector2.ONE * factor)
+	draw_weapon_icon(weapon_caption, label_x - 4, plaque_center.y + 19.5)
+	var name: String = flight.library.item_name(flight.session.weapon_id)
+	# Left-aligned as the source draws it, and never into the fire button's arc.
+	var room: float = plaque_center.x - 30 - (label_x - 2) - 1
+	HudSkin.text(weapon_caption, name, Vector2(label_x - 2, plaque_center.y + 24.5), HudSkin.fitted_size(name, 13, room, factor), factor, HudSkin.PALE)
+	weapon_caption.draw_set_transform(Vector2.ZERO)
+
+
+func draw_weapon_icon(canvas: CanvasItem, right: float, middle: float) -> void:
+	## Imported weapon icon with its right edge at `right`, centred on `middle`,
+	## in composition units under the caller's transform.
+	var icon: Texture2D = flight.library.item_icon(flight.session.weapon_id)
+	if icon == null:
+		return
+	var extent := icon.get_size()
+	canvas.draw_texture_rect(icon, Rect2(Vector2(right - extent.x, middle - extent.y * .5), extent), false)
 
 
 func steer_touch(point: Vector2) -> void:

@@ -446,6 +446,21 @@ Compatible archives with registered page sounds use those supplied clips and gai
 Audio completion never advances a page. Music keeps the existing remake volume
 setting; source sound-effect gains are preserved.
 
+`radio_ui.audio` recovers the same shape for in-flight radio: the cue the source
+plays on a message's first draw and the speech offset it subtracts from the text
+ID. The dialogue panel plays that cue when a new message appears, starts the
+message's speech when the bank registers it, and stops speech when the message
+leaves. Speech IDs outside the bank stay silent, as in the reference iPhone build.
+
+`weapon_sounds` recovers how the source chooses a firing sound from the fired
+gun's catalogue sort and index: a per-index base for the laser, EMP and rocket
+families with the two indices the source special-cases, one fixed sound for the
+fourth family, and a fallback for any other sort. `Library.weapon_sound` resolves
+a catalogue weapon through those rules; validation requires every weapon's sound
+to be registered. Flight keeps one player per registered sound, so a repeated
+shot restarts its own clip without cutting a different weapon's, and plays it at
+the bank's gain. No filename is assumed.
+
 The final encounter reader also recovers the alternate allied capital hull and
 turret mounts, the commander's own weapon balance, the message-driven objective
 and the terminal campaign announcement. The full battle uses these declarations directly. Its native director supports the
@@ -1336,8 +1351,29 @@ does not change the ship's physical heading, firing direction or cosmetic bank.
 Throttle and action fingers retain ownership outside their starting rectangles.
 Pause, cinematic capture and HUD teardown clear all transient touch state.
 
+The simulation advances at the fixed physics tick while rendering runs at the
+display's rate, so the project enables physics interpolation (jitter fix off):
+every Node3D is drawn at the pose blended between its last two ticks. Flight
+treats a change of view as a cut, not a move, and resets the camera's and
+backdrop's interpolation when it switches between chase, cockpit, directed
+framing and the outro; the action freeze orbits the camera from render frames
+and takes it out of interpolation until the scene resumes. Pooled visuals that
+reappear elsewhere (speed specks, hit flashes) reset on reuse, while nodes that
+enter the tree start unblended. The HUD projects the reticle, markers and lead
+point from the ship's and actors' interpolated poses so they stay on the hulls
+they label. Pointer steering is buffered to the tick in both control modes: a
+hull turned between ticks would leave the chase camera a tick behind and make
+the rendered pose alternate between frames. Menu, hangar, briefing, destination and opening scenes animate from
+render frames and opt out. A frame-rate limit setting caps `Engine.max_fps`;
+its default follows the panel's refresh rate and re-applies on fullscreen
+changes, since the window may land on another panel.
+
 `flight_hud_skin.gd` draws smooth cyan double rims, dark recessed disks, shaded
-steering and fire centers, and the curved original-style weapon plaque. Boost,
+steering and fire centers, and the curved original-style weapon plaque. The fire
+center's glow is centred, as the imported overlay's highlight is. The plaque shows
+the equipped weapon's imported catalogue icon right-aligned before its name, at
+the source offsets from the label origin; the name is left-aligned and shrinks
+only as far as needed to stay clear of the fire button's arc. Boost,
 weapon-cycle and missile silhouettes are isolated from the supplied textures in
 memory, so no original pixels ship with the engine. Navigation, Time and Dock
 use native glyphs; the navigation icon is a simple arrow pointing at a destination dot.

@@ -34,7 +34,7 @@ func run():
 	app.library = lib; app.ready_content = true
 	app.show_options(); app.options_panel.show_section("display")
 	var options = app.options_panel
-	check(options.entries.map(func(e): return e.action) == ["fullscreen", "aspect_ratio", "targeting_reticle", "touch"], "Display exposes window mode and aspect ratios")
+	check(options.entries.map(func(e): return e.action) == ["fullscreen", "aspect_ratio", "frame_rate", "flight_hud"], "Display exposes window mode, aspect ratio, frame rate and the flight HUD page")
 	for ratio in ["4:3", "16:9", "16:10", "21:9", "auto"]:
 		options.handle_action("aspect_ratio")
 		check(app.settings.aspect_ratio == ratio, "Ratio selection reaches " + ratio)
@@ -67,18 +67,18 @@ func run():
 	fx.free(); music.free()
 	var flight := preload("res://src/presentation/flight.gd").new()
 	root.add_child(flight)
-	for child in [flight.ship, flight.camera, flight.audio, flight.ambience, flight.player_hit]:
+	for child in [flight.ship, flight.camera, flight.ambience, flight.player_hit]:
 		flight.add_child(child)
 	flight.player_hit.add_child(flight.player_hit.audio)
 	var motion := InputEventMouseMotion.new()
 	motion.relative = Vector2(12, 0)
 	flight.pause(true)
 	flight._unhandled_input(motion)
-	check(flight.ship.rotation.is_zero_approx(), "Paused flight ignores mouse steering")
+	check(flight.ship.rotation.is_zero_approx() and flight.mouse_motion == Vector2.ZERO, "Paused flight ignores mouse steering")
 	flight.pause(false)
 	check(Input.mouse_mode == Input.MOUSE_MODE_CAPTURED, "Resume requests mouse capture")
 	flight._unhandled_input(motion)
-	check(not flight.ship.rotation.is_zero_approx(), "Resumed flight accepts mouse steering")
+	check(flight.mouse_motion != Vector2.ZERO and flight.ship.rotation.is_zero_approx(), "Resumed flight buffers mouse steering for the next tick")
 	flight.pause(true)
 	flight.queue_free(); await process_frame
 	app.queue_free(); await process_frame

@@ -66,6 +66,11 @@ static func point_valid(value: Variant) -> bool:
 	return value is Array and value.size() == 3 and value.all(func(v): return Combat.number(v) and absf(v) <= 1000000)
 
 
+func _init() -> void:
+	# Animated from render frames; the physics-tick blend would only add lag.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+
+
 func configure(source, location: int, ship: int, offers: Array) -> bool:
 	if camera != null:
 		error = "Hangar scene is already configured."

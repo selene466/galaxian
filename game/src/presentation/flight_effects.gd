@@ -280,6 +280,7 @@ func advance(
 					if boosting
 					else data.normal_speed_min + random.randf() * data.normal_speed_range
 				)
+				particle.node.reset_physics_interpolation()
 				particle.node.show()
 			else:
 				if boosting:

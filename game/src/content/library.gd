@@ -104,6 +104,8 @@ func open(directory: String, content_id: String, language: String = "gb") -> boo
 		and valid_briefing_scene()
 		and valid_survival()
 		and valid_player_armament()
+		and valid_weapon_sounds()
+		and valid_radio_audio()
 		and valid_projectile_trails()
 		and valid_menu_traffic()
 		and valid_lens_flare()
@@ -1241,6 +1243,14 @@ func ship_name(index: int) -> String:
 func item_name(index: int) -> String:
 	var binding: Dictionary = content.localization.items
 	return text(int(binding.base + index * binding.stride))
+
+
+func item_icon(index: int) -> Texture2D:
+	# The flight HUD and the hangar share one imported catalogue icon per item;
+	# the supplied HUD builds its weapon table from the same resource numbers.
+	if index < 0 or index >= items.size():
+		return null
+	return ui_image(content.hangar_ui.pictures.item_icons[index])
 
 
 func texture(name: String = "main_texture") -> Texture2D:
@@ -2748,6 +2758,75 @@ func valid_player_armament() -> bool:
 		error = "Invalid imported player weapon declarations. Import the IPA again."
 		return false
 	return true
+
+
+func valid_weapon_sounds() -> bool:
+	error = "Invalid imported weapon sounds. Import the IPA again."
+	var rules: Variant = content.get("weapon_sounds")
+	if (
+		not rules is Dictionary
+		or not rules.get("families") is Dictionary
+		or not content_integer(rules.get("fallback"))
+	):
+		return false
+	for family in rules.families.values():
+		if not family is Dictionary:
+			return false
+		if family.has("fixed"):
+			if not content_integer(family.fixed):
+				return false
+		elif not content_integer(family.get("base")):
+			return false
+		var exceptions: Variant = family.get("exceptions", {})
+		if not exceptions is Dictionary:
+			return false
+		for key in exceptions:
+			if not str(key).is_valid_int() or not content_integer(exceptions[key]):
+				return false
+	for index in items.size():
+		if int(items[index][1]) >= SHIELD_CATEGORY:
+			continue
+		if not content.get("sound_bank", {}).has(str(weapon_sound(index))):
+			error = "Missing imported weapon sound. Import the IPA again."
+			return false
+	error = ""
+	return true
+
+
+func weapon_sound(index: int) -> int:
+	## The registered sound the supplied game plays when this catalogue weapon fires.
+	var rules: Dictionary = content.weapon_sounds
+	if index < 0 or index >= items.size():
+		return int(rules.fallback)
+	var family: Dictionary = rules.families.get(str(int(items[index][1])), {})
+	if family.is_empty():
+		return int(rules.fallback)
+	if family.has("fixed"):
+		return int(family.fixed)
+	var exceptions: Dictionary = family.get("exceptions", {})
+	if exceptions.has(str(index)):
+		return int(exceptions[str(index)])
+	return int(family.base) + index
+
+
+func valid_radio_audio() -> bool:
+	error = "Invalid imported radio sounds. Import the IPA again."
+	var audio: Variant = content.radio_ui.get("audio")
+	if (
+		not audio is Dictionary
+		or not content_integer(audio.get("cue"))
+		or not content_integer(audio.get("voice_text_offset"))
+		or audio.voice_text_offset < 0
+		or not content.get("sound_bank", {}).has(str(int(audio.cue)))
+	):
+		return false
+	error = ""
+	return true
+
+
+func radio_voice(cue: Dictionary) -> int:
+	## Speech ID for a radio message; unregistered IDs stay silent, as supplied.
+	return int(cue.text) - int(content.radio_ui.audio.voice_text_offset)
 
 
 func valid_projectile_trails() -> bool:

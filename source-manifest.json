@@ -261,6 +261,8 @@
     "game/tests/flight_effects.gd.uid",
     "game/tests/flight_modes.gd",
     "game/tests/flight_modes.gd.uid",
+    "game/tests/frame_pacing.gd",
+    "game/tests/frame_pacing.gd.uid",
     "game/tests/hit_feedback.gd",
     "game/tests/hit_feedback.gd.uid",
     "game/tests/integration.gd",

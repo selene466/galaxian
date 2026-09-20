@@ -376,6 +376,7 @@ func extract_content() -> Dictionary:
 		"projectile_trails": read_phase("Reading projectile trails", projectile_trail_presentation),
 		"lens_flare": read_phase("Reading sun flares", lens_flare_presentation),
 		"sound_bank": read_phase("Reading sound resources", sound_bank),
+		"weapon_sounds": read_phase("Reading weapon sounds", weapon_sounds),
 		"player_hit": read_phase("Reading player hit effects", player_hit_presentation),
 		"actor_destruction": read_phase(
 			"Reading actor explosions", actor_destruction.bind(resources, tables.actor_meshes.size())
@@ -3684,7 +3685,8 @@ func radio_presentation() -> Dictionary:
 		fail("Invalid radio reading-time constants.")
 	var layout := radio_layout()
 	var panel := panel_presentation()
-	if layout.is_empty() or panel.is_empty() or not error.is_empty():
+	var audio := radio_audio()
+	if layout.is_empty() or panel.is_empty() or audio.is_empty() or not error.is_empty():
 		return {}
 	return {
 		"portraits": portraits,
@@ -3695,8 +3697,31 @@ func radio_presentation() -> Dictionary:
 		"lead_ms": lead,
 		"text_width": immediate_at(update + 0x152, 3) * 2,
 		"layout": layout,
-		"panel": panel
+		"panel": panel,
+		"audio": audio
 	}
+
+
+func radio_audio() -> Dictionary:
+	# The first draw of a triggered message plays a fixed cue, then the message's
+	# own speech (text ID minus an offset); finishing stops that speech. Speech
+	# IDs outside the registered bank are silent in the supplied build too.
+	var draw := symbol_address("__ZN5Radio4drawExP9PlayerEgob")
+	var voice := symbol_address("__ZN12RadioMessage10getSoundIDEv")
+	var play := symbol_address("__ZN11AbyssEngine18ApplicationManager9SoundPlayEi")
+	if (
+		call_target(draw + 0xb4) != voice
+		or call_target(draw + 0xc2) != play
+		or call_target(draw + 0xca) != play
+		or call_target(draw + 0x118) != symbol_address("__ZN12RadioMessage6finishEv")
+		or call_target(draw + 0x124) != symbol_address("__ZN11AbyssEngine18ApplicationManager9SoundStopEi")
+		or u16(draw + 0xac) & 0xfe00 != 0x5c00
+		or u16(voice) != 0x6880
+		or u16(voice + 2) & 0xff00 != 0x3800
+	):
+		fail("Unsupported radio sound declarations.")
+		return {}
+	return {"cue": immediate_at(draw + 0xb8, 1), "voice_text_offset": u16(voice + 2) & 255}
 
 
 func radio_layout() -> Dictionary:
@@ -13087,6 +13112,60 @@ func sound_bank() -> Dictionary:
 			fail("Invalid supplied sound resource path or identity.")
 			return {}
 		result[str(id)] = {"path": path, "gain": u32(address + 8) / divisor}
+	return result if error.is_empty() else {}
+
+
+func weapon_sounds() -> Dictionary:
+	# PlayerEgo::shoot selects a registered sound from the fired gun's catalogue
+	# sort and index: per-index sounds for the laser, EMP and rocket families,
+	# one shared sound for the fourth family, and a fallback for any other sort.
+	var shoot := symbol_address("__ZN9PlayerEgo5shootEix")
+	if (
+		call_target(shoot + 0x14) != symbol_address("__ZN6Player5shootEixb")
+		or call_target(shoot + 0x20) != symbol_address("__ZN6Player11getSlotSortEi")
+		or call_target(shoot + 0xa2) != symbol_address("__ZN11AbyssEngine18ApplicationManager9SoundPlayEi")
+	):
+		fail("Unsupported player weapon sound consumers.")
+		return {}
+	for offset in [0x56, 0x66, 0x74, 0x82, 0x92]:
+		if call_target(shoot + offset) != symbol_address("__ZN6Player12getSlotIndexEi"):
+			fail("Unsupported player weapon sound index lookup.")
+			return {}
+	for guard in [
+		[0xa, 0xdb4c],
+		[0x26, 0xdb3e],
+		[0x28, 0x2800],
+		[0x30, 0x2801],
+		[0x38, 0x2802],
+		[0x3c, 0x2803],
+		[0x5a, 0x281a],
+		[0x86, 0x281b],
+		[0x96, 0x1ef1]
+	]:
+		if u16(shoot + int(guard[0])) != int(guard[1]):
+			fail("Unsupported player weapon sound selection.")
+			return {}
+	if u16(shoot + 0x7a) & 0xff00 != 0x3900:
+		fail("Unsupported player weapon sound offset.")
+		return {}
+	var result := {
+		"families":
+		{
+			"0":
+			{
+				"base": immediate_at(shoot + 0x2c, 6),
+				"exceptions": {str(u16(shoot + 0x5a) & 255): immediate_at(shoot + 0x5e, 6)}
+			},
+			"1": {"fixed": immediate_at(shoot + 0x34, 6)},
+			"2": {"base": immediate_at(shoot + 0x6e, 6) - (u16(shoot + 0x7a) & 255)},
+			"3":
+			{
+				"base": immediate_at(shoot + 0x40, 6) - ((u16(shoot + 0x96) >> 6) & 7),
+				"exceptions": {str(u16(shoot + 0x86) & 255): immediate_at(shoot + 0x8a, 6)}
+			}
+		},
+		"fallback": immediate_at(shoot + 0x44, 6)
+	}
 	return result if error.is_empty() else {}
 
 

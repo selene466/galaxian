@@ -14671,7 +14671,9 @@ func check_lens_flare(source: PackedByteArray, lib) -> void:
 	check(flare.projected,"Sun ahead of camera is projected")
 	var projected:=flare.sun_screen;camera.position=Vector3(200,-70,360);flare._process(0)
 	check(flare.sun_screen.is_equal_approx(projected),"Camera translation cannot introduce sun parallax")
-	camera.look_at(camera.position-flare.direction);flare._process(0)
+	# The flare reads the pose the renderer blends per frame; an instant turn
+	# is a cut that takes effect on the next frame.
+	camera.look_at(camera.position-flare.direction);camera.reset_physics_interpolation();await process_frame;flare._process(0)
 	check(not flare.projected,"Sun behind camera cannot produce a lens flare")
 	flare.queue_free();world.queue_free();await process_frame
 
@@ -22456,7 +22458,10 @@ func check_options_menu(source: PackedByteArray, lib) -> void:
 	app.navigate_back()
 	check(app.screen == "pause" and app.flight.paused and not app.flight.settings.touch, "Leaving flight options applies settings and retains pause")
 	check(same_saved_value(app.session.capture(), saved), "Options leave campaign, inventory, projectiles and clocks unchanged")
-	check(app.flight.audio.bus == Audio.EFFECTS and app.flight.player_hit.audio.bus == Audio.EFFECTS, "Flight weapon and damage audio use the effects bus")
+	app.flight.play_weapon_sound(app.library.weapon_sound(0))
+	var weapon_voice: AudioStreamPlayer = app.flight.weapon_voices[app.library.weapon_sound(0)]
+	check(weapon_voice.bus == Audio.EFFECTS and app.flight.player_hit.audio.bus == Audio.EFFECTS, "Flight weapon and damage audio use the effects bus")
+	check(weapon_voice.stream != null and is_equal_approx(weapon_voice.volume_linear, .2), "Weapon voice carries the registered clip and its source gain")
 	app.resume_flight()
 	app.flight.set_physics_process(false)
 	check(app.screen == "flight" and not app.hud.touch_enabled, "Resuming uses the changed touch display preference")
